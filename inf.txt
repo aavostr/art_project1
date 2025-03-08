@@ -1,0 +1,2 @@
+Фронт на http://localhost:3000/
+http://localhost:3000/wishes чисто для теста, там просто get с сервака
