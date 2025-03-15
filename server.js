@@ -1,21 +1,37 @@
 // Загружаем переменные окружения из .env файла
 require('dotenv').config();
-
 const express = require('express');
 const { Client } = require('pg');
 const bodyParser = require('body-parser');
 const path = require('path');  // Для обслуживания статических файлов
 
+
+
+// отключаем corse
+const cors = require('cors');
+
+const corsOptions = {
+  origin: '*', // разрешаем все домены для примера, можно заменить на конкретный домен
+  optionsSuccessStatus: 200 // для старых браузеров
+};
+
+
+
+
+
+
 const app = express();
 const port = 3000;
 
+app.use(cors(corsOptions));
+
 // Создаем подключение к PostgreSQL используя строку подключения из переменной окружения
-const client = new Client({
+const database = new Client({
   connectionString: process.env.DATABASE_URL,  // Используем DATABASE_URL из .env
 });
 
 // Подключаемся к базе данных
-client.connect()
+database.connect()
   .then(() => {
     console.log('Connected to PostgreSQL');
   })
@@ -29,19 +45,19 @@ app.use(bodyParser.json());
 // Обслуживаем статические файлы из папки 'public' - рандомный фронт сгенерил
 app.use(express.static(path.join(__dirname, 'public')));
 
-// Получить все задачи
-app.get('/wishes', async (req, res) => {
+// Получить все задачи 
+app.get('/tasks', async (req, res) => {
   try {
-    const result = await client.query('SELECT * FROM wishes ORDER BY created_at DESC');
+    const result = await database.query('SELECT * FROM tasks ORDER BY created_at DESC');
     res.json(result.rows);
   } catch (err) {
-    console.error('Error retrieving wishes:', err);
-    res.status(500).send('Error retrieving wishes');
+    console.error('Error retrieving tasks:', err);
+    res.status(500).send('Error retrieving tasks');
   }
 });
 
 // Добавить новое желание | сделать заголовок и примечание
-app.post('/wishes', async (req, res) => {
+app.post('/tasks', async (req, res) => {
   const { title, description } = req.body;
 
   // Логируем данные для проверки
@@ -53,11 +69,12 @@ app.post('/wishes', async (req, res) => {
   }
 
   try {
-    const result = await client.query(
-      'INSERT INTO wishes (title, description) VALUES ($1, $2) RETURNING *',
+    const result = await database.query(
+      'INSERT INTO tasks (title, description) VALUES ($1, $2) RETURNING *',
       [title, description]
     );
-    res.status(201).json(result.rows[0]);
+    const tasksResult = await database.query('SELECT * FROM tasks ORDER BY created_at DESC');
+    res.json(tasksResult.rows);
   } catch (err) {
     console.error('Error adding wish:', err);  // Подробный вывод ошибки
     res.status(500).send('Error adding wish');
@@ -65,19 +82,19 @@ app.post('/wishes', async (req, res) => {
 });
 
 // Обновить желание (пометить как выполненное)
-app.put('/wishes/:id', async (req, res) => {
+app.put('/tasks/:id', async (req, res) => {
   const { id } = req.params;
   const { completed } = req.body;
-
   try {
-    const result = await client.query(
-      'UPDATE wishes SET completed = $1 WHERE id = $2 RETURNING *',
+    const result = await database.query(
+      'UPDATE tasks SET completed = $1 WHERE id = $2 RETURNING *',
       [completed, id]
     );
     if (result.rowCount === 0) {
       return res.status(404).send('Wish not found');
     }
-    res.json(result.rows[0]);
+    const tasksResult = await database.query('SELECT * FROM tasks ORDER BY created_at DESC');
+    res.json(tasksResult.rows);
   } catch (err) {
     console.error('Error updating wish:', err);
     res.status(500).send('Error updating wish');
@@ -85,14 +102,15 @@ app.put('/wishes/:id', async (req, res) => {
 });
 
 // Удалить желание
-app.delete('/wishes/:id', async (req, res) => {
+app.delete('/tasks/:id', async (req, res) => {
   const { id } = req.params;
   try {
-    const result = await client.query('DELETE FROM wishes WHERE id = $1 RETURNING *', [id]);
+    const result = await database.query('DELETE FROM tasks WHERE id = $1 RETURNING *', [id]);
     if (result.rowCount === 0) {
       return res.status(404).send('Wish not found');
     }
-    res.status(204).send();
+    const tasksResult = await database.query('SELECT * FROM tasks ORDER BY created_at DESC');
+    res.json(tasksResult.rows);
   } catch (err) {
     console.error('Error deleting wish:', err);
     res.status(500).send('Error deleting wish');
